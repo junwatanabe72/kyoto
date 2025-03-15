@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/kyoto/static/css/main.959d51dd.css",
+    "main.js": "/kyoto/static/js/main.334104d7.js",
+    "static/js/453.19c98df0.chunk.js": "/kyoto/static/js/453.19c98df0.chunk.js",
+    "index.html": "/kyoto/index.html",
+    "main.959d51dd.css.map": "/kyoto/static/css/main.959d51dd.css.map",
+    "main.334104d7.js.map": "/kyoto/static/js/main.334104d7.js.map",
+    "453.19c98df0.chunk.js.map": "/kyoto/static/js/453.19c98df0.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.959d51dd.css",
+    "static/js/main.334104d7.js"
+  ]
+}
