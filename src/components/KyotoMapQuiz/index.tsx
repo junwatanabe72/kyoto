@@ -3,20 +3,31 @@ import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import "./KyotoMapQuiz.css";
 const mapContainerStyle = { width: "100%", height: "550px" };
 
+interface TownInfo {
+  name: string;
+  area: number;
+  setai: number;
+  jinko: number;
+}
+
 function KyotoMapQuiz() {
   // Google Maps APIのロード状態
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
   });
 
-  const [hoveredTown, setHoveredTown] = useState(null);
+  const [hoveredTown, setHoveredTown] = useState<TownInfo | null>(null);
 
   // 参照
-  const mapRef = useRef(null);
-  const dataLayerRef = useRef(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const dataLayerRef = useRef<google.maps.Data | null>(null);
 
   // ジオメトリ内の全ての座標点をboundsに追加する再帰関数
-  const processPoints = (geometry, callback, thisArg) => {
+  const processPoints = (
+    geometry: any,
+    callback: (latLng: google.maps.LatLng) => void,
+    thisArg?: any
+  ) => {
     if (geometry.getType() === "Point") {
       callback.call(thisArg, geometry.get());
     } else if (

@@ -342,3 +342,4 @@ function KyotoMapQuiz() {
 }
 
 export default KyotoMapQuiz;
+
