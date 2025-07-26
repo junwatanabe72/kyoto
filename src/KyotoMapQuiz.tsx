@@ -12,23 +12,23 @@ function KyotoMapQuiz() {
   });
 
   // 状態変数
-  const [currentFeature, setCurrentFeature] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [isCorrect, setIsCorrect] = useState(null);
-  const [score, setScore] = useState(0);
-  const [totalQuestions, setTotalQuestions] = useState(0);
-  const [gameState, setGameState] = useState('waiting'); // waiting, question, result
-  const [highlightedFeature, setHighlightedFeature] = useState(null);
-  const [allMojiNames, setAllMojiNames] = useState([]);
-  const [featuresMap, setFeaturesMap] = useState({});
-  const [remainingFeatures, setRemainingFeatures] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(20);
-  const [timer, setTimer] = useState(null);
+  const [currentFeature, setCurrentFeature] = useState<any>(null);
+  const [options, setOptions] = useState<string[]>([]);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [score, setScore] = useState<number>(0);
+  const [totalQuestions, setTotalQuestions] = useState<number>(0);
+  const [gameState, setGameState] = useState<'waiting' | 'question' | 'result' | 'finished'>('waiting');
+  const [highlightedFeature, setHighlightedFeature] = useState<any>(null);
+  const [allMojiNames, setAllMojiNames] = useState<string[]>([]);
+  const [featuresMap, setFeaturesMap] = useState<Record<string, any>>({});
+  const [remainingFeatures, setRemainingFeatures] = useState<string[]>([]);
+  const [timeLeft, setTimeLeft] = useState<number>(20);
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
   
   // 参照
-  const mapRef = useRef(null);
-  const dataLayerRef = useRef(null);
+  const mapRef = useRef<any>(null);
+  const dataLayerRef = useRef<any>(null);
 
   // ゲームリセット
   const resetGame = () => {

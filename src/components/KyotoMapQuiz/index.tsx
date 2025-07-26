@@ -9,11 +9,11 @@ function KyotoMapQuiz() {
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
   });
 
-  const [hoveredTown, setHoveredTown] = useState(null);
+  const [hoveredTown, setHoveredTown] = useState<any>(null);
 
   // 参照
-  const mapRef = useRef(null);
-  const dataLayerRef = useRef(null);
+  const mapRef = useRef<any>(null);
+  const dataLayerRef = useRef<any>(null);
 
   // ジオメトリ内の全ての座標点をboundsに追加する再帰関数
   const processPoints = (geometry, callback, thisArg) => {
