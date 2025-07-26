@@ -20,10 +20,17 @@ interface Stats {
 
 const mapContainerStyle = { width: "100%", height: "550px" };
 
+const center = {
+  lat: 35.0116,
+  lng: 135.7681,
+};
+
 const allowedWards = ["中京区", "下京区", "上京区", "左京区", "右京区"];
 
 const KyotoMapAnalytics: React.FC = () => {
-  const { isLoaded } = useJsApiLoader({
+  console.log("Google Maps API Key:", process.env.REACT_APP_GOOGLE_MAPS_API_KEY ? "設定済み" : "未設定");
+  
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
   });
 
@@ -33,7 +40,12 @@ const KyotoMapAnalytics: React.FC = () => {
 
   useEffect(() => {
     fetch("./district/meshData_wgs84.geojson")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         const towns: TownInfo[] = data.features
           .filter(
@@ -64,11 +76,18 @@ const KyotoMapAnalytics: React.FC = () => {
           top5: sorted.slice(0, 5),
           ranking,
         });
+      })
+      .catch((error) => {
+        console.error("GeoJSONデータの読み込みに失敗しました:", error);
       });
   }, []);
 
+  if (loadError) {
+    return <div>地図の読み込みに失敗しました: {loadError.message}</div>;
+  }
+
   if (!isLoaded) {
-    return <div>Loading...</div>;
+    return <div>地図を読み込み中...</div>;
   }
 
   return (
@@ -109,13 +128,19 @@ const KyotoMapAnalytics: React.FC = () => {
       <div className="map-area">
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
-          zoom={15}
+          center={center}
+          zoom={13}
           onLoad={(map) => {
             mapRef.current = map;
             map.data.loadGeoJson(
               "./district/meshData_wgs84.geojson",
-              null,
-              () => {
+              {},
+              (features) => {
+                console.log(`読み込まれた地図データ: ${features.length} features`);
+                if (features.length === 0) {
+                  console.warn("GeoJSONデータが空です");
+                  return;
+                }
                 const featuresToRemove: any[] = [];
                 map.data.forEach((feature) => {
                   const city = feature.getProperty("CITY_NAME") as string;
