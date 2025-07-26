@@ -1,11 +1,11 @@
 import React from 'react';
-import KyotoMapQuiz from './components/KyotoMapQuiz';
+import KyotoMapAnalytics from './components/KyotoMapAnalytics';
 import './App.css';
 
 const App: React.FC = () => {
   return (
     <div className="App">
-      <KyotoMapQuiz />
+      <KyotoMapAnalytics />
     </div>
   );
 };
