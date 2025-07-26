@@ -1,5 +1,5 @@
 // ジオメトリ内の全ての座標点をboundsに追加する再帰関数
-export const processPoints = (geometry, callback, thisArg) => {
+export const processPoints = (geometry: any, callback: any, thisArg: any) => {
     if (geometry.getType() === 'Point') {
       callback.call(thisArg, geometry.get());
     } else if (
@@ -19,7 +19,7 @@ export const processPoints = (geometry, callback, thisArg) => {
   };
   
   // マップをロードする設定
-  export const mapOptions = {
+export const mapOptions = {
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: true,

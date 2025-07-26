@@ -2,23 +2,23 @@
 import { useState } from "react";
 
 export default function useGameLogic(
-  featuresMap,
-  allMojiNames,
-  mapRef,
-  dataLayerRef
+  featuresMap: Record<string, any>,
+  allMojiNames: string[],
+  mapRef: React.MutableRefObject<any>,
+  dataLayerRef: React.MutableRefObject<any>
 ) {
-  const [currentFeature, setCurrentFeature] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [isCorrect, setIsCorrect] = useState(null);
-  const [score, setScore] = useState(0);
-  const [totalQuestions, setTotalQuestions] = useState(0);
-  const [gameState, setGameState] = useState("waiting"); // waiting, question, result, finished
-  const [remainingFeatures, setRemainingFeatures] = useState(
+  const [currentFeature, setCurrentFeature] = useState<any>(null);
+  const [options, setOptions] = useState<string[]>([]);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [score, setScore] = useState<number>(0);
+  const [totalQuestions, setTotalQuestions] = useState<number>(0);
+  const [gameState, setGameState] = useState<'waiting' | 'question' | 'result' | 'finished'>("waiting");
+  const [remainingFeatures, setRemainingFeatures] = useState<string[]>(
     Object.keys(featuresMap || {})
   );
-  const [timeLeft, setTimeLeft] = useState(20);
-  const [timer, setTimer] = useState(null);
+  const [timeLeft, setTimeLeft] = useState<number>(20);
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
   const resetGame = () => {
     if (mapRef.current && dataLayerRef.current) {

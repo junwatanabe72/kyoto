@@ -2,12 +2,12 @@ import React from 'react';
 import KyotoMapQuiz from './components/KyotoMapQuiz';
 import './App.css';
 
-function App() {
+const App: React.FC = () => {
   return (
     <div className="App">
       <KyotoMapQuiz />
     </div>
   );
-}
+};
 
 export default App;
