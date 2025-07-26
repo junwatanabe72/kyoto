@@ -90,7 +90,7 @@ function KyotoMapQuiz() {
             ],
             // geometryライブラリを追加
             libraries: ["geometry"],
-          }}
+          } as any}
           onLoad={(map) => {
             mapRef.current = map;
             map.data.loadGeoJson(
@@ -111,7 +111,7 @@ function KyotoMapQuiz() {
                 ];
                 const featuresToRemove = [];
                 map.data.forEach((feature) => {
-                  const cityName = feature.getProperty("CITY_NAME");
+                  const cityName = feature.getProperty("CITY_NAME") as string;
                   if (!allowedWards.includes(cityName)) {
                     featuresToRemove.push(feature);
                   }
