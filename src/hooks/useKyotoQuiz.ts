@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { processPoints } from '../utils/mapUtils';
 
 function useKyotoQuiz() {
   // 状態変数
@@ -19,69 +18,65 @@ function useKyotoQuiz() {
   
   // 参照
   const mapRef = useRef<any>(null);
-  const dataLayerRef = useRef<any>(null);
+  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+  const [highlightedFeatureId, setHighlightedFeatureId] = useState<string | null>(null);
 
-  // マップ参照を設定する関数
-  const setMapRefs = (map, dataLayer) => {
-    mapRef.current = map;
-    dataLayerRef.current = dataLayer;
-  };
+  // GeoJSONデータの読み込み
+  useEffect(() => {
+    fetch('./district/meshData_wgs84.geojson')
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        const allowedWards = [
+          '中京区', '下京区', '上京区', '左京区', '右京区',
+          '伏見区', '北区', '山科区', '西京区', '東山区', '南区'
+        ];
+        
+        const filteredFeatures = data.features.filter(
+          (f: any) =>
+            allowedWards.includes(f.properties.CITY_NAME) &&
+            f.properties.MOJI &&
+            f.properties.JINKO !== null
+        );
 
-  // GeoJSONデータをロードした後の処理
-  const onGeoJsonLoaded = (features, map) => {
-    console.log('GeoJSON loaded. Number of features:', features.length);
-    
-    // 全ての町名を収集
-    const mojiNames = [];
-    const featuresObject = {};
-    
-    map.data.forEach((feature) => {
-      const moji = feature.getProperty('MOJI');
-      if (moji) {
-        mojiNames.push(moji);
-        featuresObject[feature.getId() || Math.random().toString(36).substr(2, 9)] = feature;
-      }
-    });
-    
-    setAllMojiNames(mojiNames);
-    setFeaturesMap(featuresObject);
-    setRemainingFeatures(Object.keys(featuresObject));
-    dataLayerRef.current = map.data;
-    
-    // 読み込んだフィーチャーに合わせて地図の表示範囲を調整する
-    const bounds = new window.google.maps.LatLngBounds();
-    map.data.forEach((feature) => {
-      processPoints(feature.getGeometry(), bounds.extend, bounds);
-    });
-    map.fitBounds(bounds);
-    
-    // スタイルの設定
-    map.data.setStyle({
-      fillColor: '#AEDFF7',
-      fillOpacity: 0.2,
-      strokeColor: '#0088E8',
-      strokeWeight: 1,
-      visible: true
-    });
-  };
+        setGeoJsonData({
+          type: 'FeatureCollection',
+          features: filteredFeatures
+        });
+
+        // 全ての町名を収集
+        const mojiNames = [];
+        const featuresObject = {};
+        
+        filteredFeatures.forEach((feature, index) => {
+          const moji = feature.properties.MOJI;
+          if (moji) {
+            mojiNames.push(moji);
+            featuresObject[`feature_${index}`] = feature;
+          }
+        });
+        
+        setAllMojiNames(mojiNames);
+        setFeaturesMap(featuresObject);
+        setRemainingFeatures(Object.keys(featuresObject));
+      })
+      .catch((error) => {
+        console.error('GeoJSONデータの読み込みに失敗しました:', error);
+      });
+  }, []);
 
   // ゲームリセット
   const resetGame = () => {
-    if (mapRef.current && dataLayerRef.current) {
-      dataLayerRef.current.setStyle({
-        fillColor: '#AEDFF7',
-        fillOpacity: 0.2,
-        strokeColor: '#0088E8',
-        strokeWeight: 1,
-        visible: true
-      });
-      
-      setScore(0);
-      setTotalQuestions(0);
-      setGameState('waiting');
-      setHighlightedFeature(null);
-      setRemainingFeatures([...Object.keys(featuresMap)]);
-    }
+    setScore(0);
+    setTotalQuestions(0);
+    setGameState('waiting');
+    setHighlightedFeature(null);
+    setHighlightedFeatureId(null);
+    setRemainingFeatures([...Object.keys(featuresMap)]);
   };
 
   // 新しい問題を生成
@@ -107,9 +102,10 @@ function useKyotoQuiz() {
     // 問題設定
     setCurrentFeature(feature);
     setHighlightedFeature(feature);
+    setHighlightedFeatureId(featureId);
     
     // 選択肢を生成 (正解 + ランダムな3つの選択肢)
-    const correctMoji = feature.getProperty('MOJI');
+    const correctMoji = feature.properties.MOJI;
     let optionsArray = [correctMoji];
     
     while (optionsArray.length < 4) {
@@ -142,32 +138,6 @@ function useKyotoQuiz() {
       });
     }, 1000);
     setTimer(newTimer);
-
-    // マップの表示を更新
-    if (mapRef.current && dataLayerRef.current) {
-      // すべての特徴を薄いスタイルに
-      dataLayerRef.current.setStyle({
-        fillColor: '#AEDFF7',
-        fillOpacity: 0.1,
-        strokeColor: '#0088E8',
-        strokeWeight: 0.5,
-        visible: true
-      });
-      
-      // ハイライトする特徴のスタイルを変更
-      dataLayerRef.current.overrideStyle(feature, {
-        fillColor: '#FFC107',
-        fillOpacity: 0.7,
-        strokeColor: '#FF9800',
-        strokeWeight: 2,
-        visible: true
-      });
-      
-      // マップビューを特徴の範囲に合わせる
-      const bounds = new window.google.maps.LatLngBounds();
-      processPoints(feature.getGeometry(), bounds.extend, bounds);
-      mapRef.current.fitBounds(bounds, { padding: 50 });
-    }
   };
 
   // 答えの確認
@@ -176,7 +146,7 @@ function useKyotoQuiz() {
     
     if (!currentFeature) return;
     
-    const correctAnswer = currentFeature.getProperty('MOJI');
+    const correctAnswer = currentFeature.properties.MOJI;
     const isAnswerCorrect = option === correctAnswer;
     
     setSelectedOption(option);
@@ -187,17 +157,6 @@ function useKyotoQuiz() {
     }
     
     setGameState('result');
-    
-    // 結果表示のスタイルを設定
-    if (mapRef.current && dataLayerRef.current && currentFeature) {
-      dataLayerRef.current.overrideStyle(currentFeature, {
-        fillColor: isAnswerCorrect ? '#4CAF50' : '#F44336',
-        fillOpacity: 0.7,
-        strokeColor: isAnswerCorrect ? '#388E3C' : '#D32F2F',
-        strokeWeight: 2,
-        visible: true
-      });
-    }
   };
 
   // 次の問題へ
@@ -218,16 +177,15 @@ function useKyotoQuiz() {
     timeLeft,
     
     // アクション
-    setMapRefs,
-    onGeoJsonLoaded,
     generateNewQuestion,
     checkAnswer,
     nextQuestion,
     resetGame,
     
-    // refs
+    // refs and data
     mapRef,
-    dataLayerRef
+    geoJsonData,
+    highlightedFeatureId
   };
 }
 

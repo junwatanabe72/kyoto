@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
+import Map, { Source, Layer } from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import './KyotoMapQuiz.css';
 
 const mapContainerStyle = { width: '100%', height: '550px' };
-const center = { lat: 35.0116, lng: 135.7681 };
+const initialViewState = {
+  longitude: 135.7681,
+  latitude: 35.0116,
+  zoom: 13
+};
 
 function KyotoMapQuiz() {
-  // Google Maps APIのロード状態
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: 'AIzaSyA1AQfUtxSAW3-S-3kc0CvRXU__flcYdWY' // ご自身のAPIキーに置き換えてください
-  });
 
   // 状態変数
   const [currentFeature, setCurrentFeature] = useState<any>(null);
@@ -25,28 +26,21 @@ function KyotoMapQuiz() {
   const [remainingFeatures, setRemainingFeatures] = useState<string[]>([]);
   const [timeLeft, setTimeLeft] = useState<number>(20);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
+  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+  const [highlightedFeatureId, setHighlightedFeatureId] = useState<string | null>(null);
+  const [viewState, setViewState] = useState(initialViewState);
   
   // 参照
   const mapRef = useRef<any>(null);
-  const dataLayerRef = useRef<any>(null);
 
   // ゲームリセット
   const resetGame = () => {
-    if (mapRef.current && dataLayerRef.current) {
-      dataLayerRef.current.setStyle({
-        fillColor: '#AEDFF7',
-        fillOpacity: 0.2,
-        strokeColor: '#0088E8',
-        strokeWeight: 1,
-        visible: true
-      });
-      
-      setScore(0);
-      setTotalQuestions(0);
-      setGameState('waiting');
-      setHighlightedFeature(null);
-      setRemainingFeatures([...Object.keys(featuresMap)]);
-    }
+    setScore(0);
+    setTotalQuestions(0);
+    setGameState('waiting');
+    setHighlightedFeature(null);
+    setHighlightedFeatureId(null);
+    setRemainingFeatures([...Object.keys(featuresMap)]);
   };
 
   // 新しい問題を生成
@@ -72,9 +66,10 @@ function KyotoMapQuiz() {
     // 問題設定
     setCurrentFeature(feature);
     setHighlightedFeature(feature);
+    setHighlightedFeatureId(featureId);
     
     // 選択肢を生成 (正解 + ランダムな3つの選択肢)
-    const correctMoji = feature.getProperty('MOJI');
+    const correctMoji = feature.properties.MOJI;
     let optionsArray = [correctMoji];
     
     while (optionsArray.length < 4) {
@@ -107,32 +102,6 @@ function KyotoMapQuiz() {
       });
     }, 1000);
     setTimer(newTimer);
-
-    // マップの表示を更新
-    if (mapRef.current && dataLayerRef.current) {
-      // すべての特徴を薄いスタイルに
-      dataLayerRef.current.setStyle({
-        fillColor: '#AEDFF7',
-        fillOpacity: 0.1,
-        strokeColor: '#0088E8',
-        strokeWeight: 0.5,
-        visible: true
-      });
-      
-      // ハイライトする特徴のスタイルを変更
-      dataLayerRef.current.overrideStyle(feature, {
-        fillColor: '#FFC107',
-        fillOpacity: 0.7,
-        strokeColor: '#FF9800',
-        strokeWeight: 2,
-        visible: true
-      });
-      
-      // マップビューを特徴の範囲に合わせる
-      const bounds = new window.google.maps.LatLngBounds();
-      processPoints(feature.getGeometry(), bounds.extend, bounds);
-      mapRef.current.fitBounds(bounds, { padding: 50 });
-    }
   };
 
   // 答えの確認
@@ -141,7 +110,7 @@ function KyotoMapQuiz() {
     
     if (!currentFeature) return;
     
-    const correctAnswer = currentFeature.getProperty('MOJI');
+    const correctAnswer = currentFeature.properties.MOJI;
     const isAnswerCorrect = option === correctAnswer;
     
     setSelectedOption(option);
@@ -152,17 +121,6 @@ function KyotoMapQuiz() {
     }
     
     setGameState('result');
-    
-    // 結果表示のスタイルを設定
-    if (mapRef.current && dataLayerRef.current && currentFeature) {
-      dataLayerRef.current.overrideStyle(currentFeature, {
-        fillColor: isAnswerCorrect ? '#4CAF50' : '#F44336',
-        fillOpacity: 0.7,
-        strokeColor: isAnswerCorrect ? '#388E3C' : '#D32F2F',
-        strokeWeight: 2,
-        visible: true
-      });
-    }
   };
 
   // 次の問題へ
@@ -170,32 +128,61 @@ function KyotoMapQuiz() {
     generateNewQuestion();
   };
 
-  // ジオメトリ内の全ての座標点をboundsに追加する再帰関数
-  const processPoints = (geometry, callback, thisArg) => {
-    if (geometry.getType() === 'Point') {
-      callback.call(thisArg, geometry.get());
-    } else if (
-      geometry.getType() === 'MultiPoint' ||
-      geometry.getType() === 'LineString' ||
-      geometry.getType() === 'LinearRing'
-    ) {
-      geometry.getArray().forEach(callback, thisArg);
-    } else if (
-      geometry.getType() === 'MultiLineString' ||
-      geometry.getType() === 'MultiPolygon'
-    ) {
-      geometry.getArray().forEach((g) => processPoints(g, callback, thisArg));
-    } else if (geometry.getType() === 'Polygon') {
-      geometry.getArray().forEach((g) => processPoints(g, callback, thisArg));
-    }
-  };
+  // GeoJSONデータの読み込み
+  useEffect(() => {
+    fetch('/district/meshData_wgs84.geojson')
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        const allowedWards = [
+          '中京区', '下京区', '上京区', '左京区', '右京区',
+          '伏見区', '北区', '山科区', '西京区', '東山区', '南区'
+        ];
+        
+        const filteredFeatures = data.features.filter(
+          (f: any) =>
+            allowedWards.includes(f.properties.CITY_NAME) &&
+            f.properties.MOJI &&
+            f.properties.JINKO !== null
+        );
 
-  if (!isLoaded) return (
-    <div className="loading-container">
-      <div className="loading-spinner"></div>
-      <p>地図を読み込み中...</p>
-    </div>
-  );
+        setGeoJsonData({
+          type: 'FeatureCollection',
+          features: filteredFeatures
+        });
+
+        // 全ての町名を収集
+        const mojiNames = [];
+        const featuresObject = {};
+        
+        filteredFeatures.forEach((feature, index) => {
+          const moji = feature.properties.MOJI;
+          if (moji) {
+            mojiNames.push(moji);
+            featuresObject[`feature_${index}`] = feature;
+          }
+        });
+        
+        setAllMojiNames(mojiNames);
+        setFeaturesMap(featuresObject);
+        setRemainingFeatures(Object.keys(featuresObject));
+      })
+      .catch((error) => {
+        console.error('GeoJSONデータの読み込みに失敗しました:', error);
+      });
+  }, []);
+
+  if (!process.env.REACT_APP_MAPBOX_ACCESS_TOKEN) {
+    return (
+      <div className="loading-container">
+        <p>Mapbox APIキーが設定されていません</p>
+      </div>
+    );
+  }
 
   return (
     <div className="kyoto-map-quiz">
@@ -217,63 +204,64 @@ function KyotoMapQuiz() {
       </header>
 
       <div className="map-container">
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={center}
-          zoom={13}
-          options={{
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: true,
-            zoomControl: true,
-            styles: [
-              {
-                featureType: 'poi',
-                elementType: 'labels',
-                stylers: [{ visibility: 'off' }]
-              }
-            ]
-          }}
-          onLoad={(map) => {
-            mapRef.current = map;
-            map.data.loadGeoJson('/meshData.geojson', null, (features) => {
-              console.log('GeoJSON loaded. Number of features:', features.length);
-              
-              // 全ての町名を収集
-              const mojiNames = [];
-              const featuresObject = {};
-              
-              map.data.forEach((feature) => {
-                const moji = feature.getProperty('MOJI');
-                if (moji) {
-                  mojiNames.push(moji);
-                  featuresObject[feature.getId() || Math.random().toString(36).substr(2, 9)] = feature;
-                }
-              });
-              
-              setAllMojiNames(mojiNames);
-              setFeaturesMap(featuresObject);
-              setRemainingFeatures(Object.keys(featuresObject));
-              dataLayerRef.current = map.data;
-              
-              // 読み込んだフィーチャーに合わせて地図の表示範囲を調整する
-              const bounds = new window.google.maps.LatLngBounds();
-              map.data.forEach((feature) => {
-                processPoints(feature.getGeometry(), bounds.extend, bounds);
-              });
-              map.fitBounds(bounds);
-              
-              // スタイルの設定
-              map.data.setStyle({
-                fillColor: '#AEDFF7',
-                fillOpacity: 0.2,
-                strokeColor: '#0088E8',
-                strokeWeight: 1,
-                visible: true
-              });
-            });
-          }}
-        />
+        <Map
+          ref={mapRef}
+          {...viewState}
+          onMove={evt => setViewState(evt.viewState)}
+          style={mapContainerStyle}
+          mapStyle="mapbox://styles/mapbox/streets-v12"
+          mapboxAccessToken={process.env.REACT_APP_MAPBOX_ACCESS_TOKEN}
+        >
+          {geoJsonData && (
+            <Source id="kyoto-districts-source" type="geojson" data={geoJsonData}>
+              <Layer
+                id="kyoto-districts"
+                type="fill"
+                paint={{
+                  'fill-color': [
+                    'case',
+                    ['==', ['get', 'MOJI'], highlightedFeatureId ? featuresMap[highlightedFeatureId]?.properties?.MOJI || '' : ''],
+                    gameState === 'result' ? (isCorrect ? '#4CAF50' : '#F44336') : '#FFC107',
+                    [
+                      'interpolate',
+                      ['linear'],
+                      ['get', 'JINKO'],
+                      0, '#F3E5F5',
+                      1000, '#CE93D8', 
+                      5000, '#AB47BC',
+                      10000, '#8E24AA',
+                      20000, '#6A1B9A'
+                    ]
+                  ],
+                  'fill-opacity': [
+                    'case',
+                    ['==', ['get', 'MOJI'], highlightedFeatureId ? featuresMap[highlightedFeatureId]?.properties?.MOJI || '' : ''],
+                    0.7,
+                    gameState === 'question' ? 0.1 : 0.2
+                  ]
+                }}
+              />
+              <Layer
+                id="kyoto-districts-border"
+                type="line"
+                paint={{
+                  'line-color': [
+                    'case',
+                    ['==', ['get', 'MOJI'], highlightedFeatureId ? featuresMap[highlightedFeatureId]?.properties?.MOJI || '' : ''],
+                    gameState === 'result' ? (isCorrect ? '#388E3C' : '#D32F2F') : '#FF9800',
+                    '#424242'
+                  ],
+                  'line-width': [
+                    'case',
+                    ['==', ['get', 'MOJI'], highlightedFeatureId ? featuresMap[highlightedFeatureId]?.properties?.MOJI || '' : ''],
+                    2,
+                    1
+                  ]
+                }}
+              />
+            </Source>
+          )}
+        </Map>
       </div>
 
       <div className="quiz-controls">
@@ -313,7 +301,7 @@ function KyotoMapQuiz() {
               {isCorrect ? '正解！' : '不正解'}
             </div>
             <p className="result-message">
-              正解は「<span className="correct-answer">{currentFeature?.getProperty('MOJI')}</span>」です。
+              正解は「<span className="correct-answer">{currentFeature?.properties?.MOJI}</span>」です。
             </p>
             <button 
               className="next-button"

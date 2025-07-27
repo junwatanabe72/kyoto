@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import Map, { Source, Layer } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import "./KyotoMapAnalytics.css";
 
 interface TownInfo {
@@ -20,26 +21,27 @@ interface Stats {
 
 const mapContainerStyle = { width: "100%", height: "550px" };
 
-const center = {
-  lat: 35.0116,
-  lng: 135.7681,
+const initialViewState = {
+  longitude: 135.7681,
+  latitude: 35.0116,
+  zoom: 11
 };
 
-const allowedWards = ["中京区", "下京区", "上京区", "左京区", "右京区"];
+const allowedWards = ["中京区", "下京区", "上京区", "左京区", "右京区", "伏見区", "北区", "山科区", "西京区", "東山区", "南区"];
 
 const KyotoMapAnalytics: React.FC = () => {
-  console.log("Google Maps API Key:", process.env.REACT_APP_GOOGLE_MAPS_API_KEY ? "設定済み" : "未設定");
-  
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
-  });
+  console.log("🔄 KyotoMapAnalytics component loaded - NEW VERSION");
+  console.log("Mapbox API Key:", process.env.REACT_APP_MAPBOX_ACCESS_TOKEN ? "設定済み" : "未設定");
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [selectedTown, setSelectedTown] = useState<TownInfo | null>(null);
+  const [geoJsonData, setGeoJsonData] = useState<any>(null);
+  const [viewState, setViewState] = useState(initialViewState);
   const mapRef = useRef<any>(null);
 
   useEffect(() => {
-    fetch("./district/meshData_wgs84.geojson")
+    console.log('Fetching GeoJSON data...');
+    fetch("/district/meshData_wgs84.geojson")
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -47,13 +49,50 @@ const KyotoMapAnalytics: React.FC = () => {
         return res.json();
       })
       .then((data) => {
-        const towns: TownInfo[] = data.features
-          .filter(
-            (f: any) =>
-              allowedWards.includes(f.properties.CITY_NAME) &&
-              f.properties.MOJI &&
-              f.properties.JINKO !== null
-          )
+        console.log('GeoJSON data loaded:', data);
+        console.log('Original features count:', data.features.length);
+        console.log('Sample feature properties:', data.features[0]?.properties);
+        
+        // 全区の特徴を確認
+        const cityNames = data.features.map((f: any) => f.properties.CITY_NAME);
+        const uniqueCities = Array.from(new Set(cityNames));
+        console.log('All unique cities in data:', uniqueCities);
+        
+        const filteredFeatures = data.features.filter(
+          (f: any) => {
+            const hasValidCity = allowedWards.includes(f.properties.CITY_NAME);
+            if (hasValidCity) {
+              console.log('Valid ward found:', f.properties.CITY_NAME, 'MOJI:', f.properties.MOJI, 'JINKO:', f.properties.JINKO);
+            }
+            return hasValidCity;
+          }
+        );
+        
+        // テスト用：フィルタリングされた特徴がない場合、最初の100個を表示
+        if (filteredFeatures.length === 0) {
+          console.warn('No filtered features found! Using first 100 features for testing...');
+          const testFeatures = data.features.slice(0, 100);
+          setGeoJsonData({
+            type: "FeatureCollection",
+            features: testFeatures
+          });
+          return;
+        }
+        
+        console.log('Filtered features count:', filteredFeatures.length);
+        console.log('First 5 filtered features:', filteredFeatures.slice(0, 5).map((f: any) => f.properties));
+        
+        // すべてのフィルタされた特徴を表示に含める
+        const geoJson = {
+          type: "FeatureCollection",
+          features: filteredFeatures
+        };
+        console.log('Final GeoJSON for map:', geoJson);
+        setGeoJsonData(geoJson);
+        
+        // 統計用の町データ（MOJIとJINKOがあるもののみ）
+        const towns: TownInfo[] = filteredFeatures
+          .filter((f: any) => f.properties.MOJI && f.properties.JINKO !== null)
           .map((f: any) => ({
             MOJI: f.properties.MOJI,
             CITY_NAME: f.properties.CITY_NAME,
@@ -61,6 +100,8 @@ const KyotoMapAnalytics: React.FC = () => {
             JINKO: Number(f.properties.JINKO),
             SETAI: Number(f.properties.SETAI),
           }));
+
+        console.log('Towns for stats:', towns.length);
 
         const totalPopulation = towns.reduce((s, t) => s + t.JINKO, 0);
         const totalTowns = towns.length;
@@ -79,15 +120,12 @@ const KyotoMapAnalytics: React.FC = () => {
       })
       .catch((error) => {
         console.error("GeoJSONデータの読み込みに失敗しました:", error);
+        console.error('Error details:', error.message);
       });
   }, []);
 
-  if (loadError) {
-    return <div>地図の読み込みに失敗しました: {loadError.message}</div>;
-  }
-
-  if (!isLoaded) {
-    return <div>地図を読み込み中...</div>;
+  if (!process.env.REACT_APP_MAPBOX_ACCESS_TOKEN) {
+    return <div>Mapbox APIキーが設定されていません</div>;
   }
 
   return (
@@ -126,57 +164,51 @@ const KyotoMapAnalytics: React.FC = () => {
         )}
       </div>
       <div className="map-area">
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={center}
-          zoom={13}
-          onLoad={(map) => {
-            mapRef.current = map;
-            map.data.loadGeoJson(
-              "./district/meshData_wgs84.geojson",
-              {},
-              (features) => {
-                console.log(`読み込まれた地図データ: ${features.length} features`);
-                if (features.length === 0) {
-                  console.warn("GeoJSONデータが空です");
-                  return;
-                }
-                const featuresToRemove: any[] = [];
-                map.data.forEach((feature) => {
-                  const city = feature.getProperty("CITY_NAME") as string;
-                  if (!allowedWards.includes(city)) {
-                    featuresToRemove.push(feature);
-                  }
-                });
-                featuresToRemove.forEach((f) => map.data.remove(f));
-
-                map.data.setStyle({
-                  fillColor: "#AEDFF7",
-                  fillOpacity: 0.2,
-                  strokeColor: "#0088E8",
-                  strokeWeight: 1,
-                });
-
-                map.data.addListener("click", (event: any) => {
-                  const moji = event.feature.getProperty("MOJI");
-                  const area = event.feature.getProperty("AREA");
-                  const setai = event.feature.getProperty("SETAI");
-                  const jinko = event.feature.getProperty("JINKO");
-                  const city = event.feature.getProperty("CITY_NAME") as string;
-                  if (moji) {
-                    setSelectedTown({
-                      MOJI: moji,
-                      CITY_NAME: city,
-                      AREA: Number(area),
-                      SETAI: Number(setai),
-                      JINKO: Number(jinko),
-                    });
-                  }
-                });
-              }
-            );
+        <div style={{ padding: '10px', background: '#f0f0f0', marginBottom: '10px' }}>
+          <p>Mapbox Test Status:</p>
+          <p>API Key: {process.env.REACT_APP_MAPBOX_ACCESS_TOKEN ? '✅ 設定済み' : '❌ 未設定'}</p>
+          <p>Map Loading Status: <span id="map-status">待機中...</span></p>
+        </div>
+        
+        <Map
+          {...viewState}
+          onMove={evt => setViewState(evt.viewState)}
+          style={mapContainerStyle}
+          mapStyle="mapbox://styles/mapbox/streets-v12"
+          mapboxAccessToken={process.env.REACT_APP_MAPBOX_ACCESS_TOKEN}
+          onLoad={() => {
+            console.log('✅ Map loaded successfully!');
+            const statusEl = document.getElementById('map-status');
+            if (statusEl) statusEl.textContent = '✅ マップ読み込み完了';
           }}
-        />
+          onError={(error) => {
+            console.error('❌ Map loading error:', error);
+            const statusEl = document.getElementById('map-status');
+            if (statusEl) statusEl.textContent = `❌ エラー: ${error.error || 'Unknown error'}`;
+          }}
+        >
+          {/* 最もシンプルなテストレイヤー */}
+          <Source
+            id="simple-test"
+            type="geojson"
+            data={{
+              type: "Feature",
+              geometry: {
+                type: "Point",
+                coordinates: [135.7681, 35.0116]
+              }
+            }}
+          >
+            <Layer
+              id="simple-circle"
+              type="circle"
+              paint={{
+                'circle-radius': 30,
+                'circle-color': '#FF0000'
+              }}
+            />
+          </Source>
+        </Map>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import Map, { Source, Layer } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import StatisticsSidebar from '../StatisticsSidebar';
 
 const KyotoTownDashboard = ({ dashboardData }) => {
@@ -8,20 +9,25 @@ const KyotoTownDashboard = ({ dashboardData }) => {
   const [stats, setStats] = useState(null);
   const mapRef = useRef(null);
 
+  console.log("🔄 KyotoTownDashboard component loaded - NEW VERSION");
   console.log(
     "KyotoTownDashboard render, dashboardData:",
     dashboardData ? "exists" : "null"
   );
   console.log(
-    "Google Maps API Key:",
-    process.env.REACT_APP_GOOGLE_MAPS_API_KEY ? "設定済み" : "未設定"
+    "Mapbox API Key:",
+    process.env.REACT_APP_MAPBOX_ACCESS_TOKEN ? "設定済み" : "未設定"
   );
 
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+  const [geoJsonData, setGeoJsonData] = useState(null);
+  const [hoveredFeatureId, setHoveredFeatureId] = useState(null);
+  const [viewState, setViewState] = useState({
+    longitude: 135.7681,
+    latitude: 35.0116,
+    zoom: 11
   });
 
-  const allowedWards = ["中京区", "下京区", "上京区", "左京区", "右京区"];
+  const allowedWards = React.useMemo(() => ["中京区", "下京区", "上京区", "左京区", "右京区", "伏見区", "北区", "山科区", "西京区", "東山区", "南区"], []);
 
   // 地図の設定をuseMemoで固定して再レンダリング時の初期化を防ぐ
   const mapContainerStyle = React.useMemo(
@@ -33,26 +39,6 @@ const KyotoTownDashboard = ({ dashboardData }) => {
     []
   );
 
-  const center = React.useMemo(
-    () => ({
-      lat: 35.0116,
-      lng: 135.7681,
-    }),
-    []
-  );
-
-  const mapOptions = React.useMemo(
-    () => ({
-      disableDefaultUI: false,
-      zoomControl: true,
-      mapTypeControl: false,
-      scaleControl: true,
-      streetViewControl: false,
-      rotateControl: false,
-      fullscreenControl: true,
-    }),
-    []
-  );
 
   // 分析データの計算
   useEffect(() => {
@@ -91,84 +77,68 @@ const KyotoTownDashboard = ({ dashboardData }) => {
       top5: sorted.slice(0, 5),
       ranking,
     });
-  }, [dashboardData]);
+  }, [dashboardData, allowedWards]);
 
   // 町選択ハンドラー（地図連携用）
   const handleTownSelect = (town) => {
     setSelectedTown(town);
-    if (mapRef.current && town) {
-      // 地図上で町を見つけてフォーカス
-      const townFeature = findTownFeature(town.MOJI);
-      if (townFeature) {
-        focusOnTownFeature(townFeature);
-      }
+    // Mapboxでのフォーカス処理はシンプルにする
+  };
+
+  // App.tsxから渡されるdashboardDataを使用
+  useEffect(() => {
+    if (!dashboardData) {
+      console.log('⏳ Waiting for dashboardData from App.tsx...');
+      return;
     }
-  };
-
-  // 地図上の町フィーチャーを検索
-  const findTownFeature = (townName) => {
-    let foundFeature = null;
-    mapRef.current?.data.forEach((feature) => {
-      if (feature.getProperty('MOJI') === townName) {
-        foundFeature = feature;
-      }
-    });
-    return foundFeature;
-  };
-
-  // 町フィーチャーにフォーカス
-  const focusOnTownFeature = (feature) => {
-    if (!mapRef.current || !window.google?.maps) return;
     
-    try {
-      // 既存のハイライトをクリア
-      mapRef.current.data.revertStyle();
-      
-      // 新しいハイライト
-      mapRef.current.data.overrideStyle(feature, {
-        fillColor: "#FF6B35",
-        fillOpacity: 0.6,
-        strokeColor: "#FF6B35",
-        strokeWeight: 3
-      });
-      
-      // 地図を町の位置に移動
-      const geometry = feature.getGeometry();
-      if (geometry && geometry.getType() === 'Polygon') {
-        const bounds = new window.google.maps.LatLngBounds();
-        const coordinates = geometry.getAt(0);
-        if (coordinates) {
-          coordinates.forEach(coord => {
-            if (coord && typeof coord.lat === 'function' && typeof coord.lng === 'function') {
-              bounds.extend({ lat: coord.lat(), lng: coord.lng() });
-            }
-          });
-          mapRef.current.fitBounds(bounds);
-          // ズームレベルを適切に設定
-          setTimeout(() => {
-            if (mapRef.current) {
-              const currentZoom = mapRef.current.getZoom();
-              if (currentZoom > 16) {
-                mapRef.current.setZoom(16);
-              }
-            }
-          }, 100);
-        }
-      }
-    } catch (error) {
-      console.error('地図フォーカス処理でエラーが発生しました:', error);
+    console.log('✅ Dashboard - Using dashboardData from App.tsx');
+    console.log('📊 Features count:', dashboardData.features?.length || 0);
+    console.log('🔍 Sample feature:', dashboardData.features?.[0]?.properties);
+    
+    // フィルタリングでKyoto区データを取得
+    const filteredFeatures = dashboardData.features.filter(
+      (f) => allowedWards.includes(f.properties.CITY_NAME)
+    );
+    console.log('🎯 Filtered Kyoto ward features count:', filteredFeatures.length);
+    console.log('🏛️ Allowed wards:', allowedWards);
+    
+    // 実際にどの区が見つかっているかチェック
+    const foundWards = Array.from(new Set(dashboardData.features.map(f => f.properties.CITY_NAME)));
+    console.log('🗾 All wards in data:', foundWards);
+    const foundKyotoWards = foundWards.filter(ward => allowedWards.includes(ward));
+    console.log('✅ Found Kyoto wards:', foundKyotoWards);
+    
+    // フィルタリングされた京都区データを設定
+    if (filteredFeatures.length > 0) {
+      console.log('🏙️ Setting filtered Kyoto ward data...');
+      // feature idを追加してホバー機能を有効化
+      const featuresWithId = filteredFeatures.map((feature, index) => ({
+        ...feature,
+        id: index
+      }));
+      const kyotoData = {
+        type: 'FeatureCollection',
+        features: featuresWithId
+      };
+      setGeoJsonData(kyotoData);
+      console.log('📋 Kyoto GeoJSON data set with', filteredFeatures.length, 'features');
+    } else {
+      console.warn('⚠️ No Kyoto ward features found, using test data');
+      const featuresWithId = dashboardData.features.slice(0, 100).map((feature, index) => ({
+        ...feature,
+        id: index
+      }));
+      const testData = {
+        type: 'FeatureCollection',
+        features: featuresWithId
+      };
+      setGeoJsonData(testData);
     }
-  };
+  }, [dashboardData, allowedWards]);
 
-  console.log("Render state - isLoaded:", isLoaded, "loadError:", loadError);
-
-  if (loadError) {
-    console.error("Map load error:", loadError);
-    return <div>地図の読み込みに失敗しました: {loadError.message}</div>;
-  }
-
-  if (!isLoaded) {
-    return <div>地図を読み込み中...</div>;
+  if (!process.env.REACT_APP_MAPBOX_ACCESS_TOKEN) {
+    return <div>Mapbox APIキーが設定されていません</div>;
   }
 
   return (
@@ -394,89 +364,133 @@ const KyotoTownDashboard = ({ dashboardData }) => {
         position: "relative",
         overflow: "hidden"
       }}>
-        <GoogleMap
-          mapContainerStyle={mapContainerStyle}
-          center={center}
-          zoom={13}
-          options={mapOptions}
-          onLoad={(map) => {
-            console.log("Map loaded");
-            mapRef.current = map;
 
-            // 直接GeoJSONファイルをロード（dashboardDataに依存しない）
-            const geoJsonUrl = `${process.env.PUBLIC_URL}/district/meshData_wgs84.geojson`;
-            console.log("Loading GeoJSON from:", geoJsonUrl);
-
-            map.data.loadGeoJson(geoJsonUrl, {}, (features) => {
-              console.log(
-                `読み込まれた地図データ: ${features.length} features`
-              );
-              if (features.length === 0) {
-                console.warn("GeoJSONデータが空です");
-                return;
+        <Map
+          ref={mapRef}
+          {...viewState}
+          onMove={evt => setViewState(evt.viewState)}
+          style={mapContainerStyle}
+          mapStyle="mapbox://styles/mapbox/streets-v12"
+          transformRequest={(url, resourceType) => {
+            if (resourceType === 'Style' && url.includes('mapbox://styles')) {
+              return {
+                url: url + '?language=ja'
+              };
+            }
+          }}
+          locale={{
+            'NavigationControl.ZoomIn': 'ズームイン',
+            'NavigationControl.ZoomOut': 'ズームアウト',
+            'NavigationControl.Compass': 'コンパス'
+          }}
+          mapboxAccessToken={process.env.REACT_APP_MAPBOX_ACCESS_TOKEN}
+          onMouseMove={(event) => {
+            if (event.features && event.features.length > 0) {
+              const feature = event.features[0];
+              const props = feature.properties;
+              
+              console.log('🖱️ Mouse over feature:', feature.id, props?.CITY_NAME);
+              
+              // ホバーエフェクト
+              if (hoveredFeatureId !== null && hoveredFeatureId !== feature.id) {
+                console.log('🔄 Removing hover from:', hoveredFeatureId);
+                mapRef.current?.getMap().setFeatureState(
+                  { source: 'kyoto-districts-source', id: hoveredFeatureId },
+                  { hover: false }
+                );
+              }
+              
+              if (feature.id !== hoveredFeatureId) {
+                console.log('✨ Setting hover on:', feature.id);
+                setHoveredFeatureId(feature.id);
+                mapRef.current?.getMap().setFeatureState(
+                  { source: 'kyoto-districts-source', id: feature.id },
+                  { hover: true }
+                );
               }
 
-              const featuresToRemove = [];
-              map.data.forEach((feature) => {
-                const city = feature.getProperty("CITY_NAME");
-                if (!allowedWards.includes(city)) {
-                  featuresToRemove.push(feature);
-                }
-              });
-              console.log("Removing features:", featuresToRemove.length);
-              featuresToRemove.forEach((f) => map.data.remove(f));
-
-              map.data.setStyle({
-                fillColor: "#AEDFF7",
-                fillOpacity: 0.2,
-                strokeColor: "#0088E8",
-                strokeWeight: 1,
-              });
-
-              console.log("Setting up event listeners");
-
-              // ホバー効果を追加
-              map.data.addListener("mouseover", (event) => {
-                console.log("Mouseover event triggered");
-                map.data.overrideStyle(event.feature, {
-                  fillColor: "#ff0000",
-                  fillOpacity: 0.4,
+              if (props?.MOJI) {
+                setSelectedTown({
+                  MOJI: props.MOJI,
+                  CITY_NAME: props.CITY_NAME,
+                  AREA: Number(props.AREA),
+                  SETAI: Number(props.SETAI),
+                  JINKO: Number(props.JINKO),
                 });
-
-                const moji = event.feature.getProperty("MOJI");
-                const cityName = event.feature.getProperty("CITY_NAME");
-                const area = event.feature.getProperty("AREA");
-                const jinko = event.feature.getProperty("JINKO");
-                const setai = event.feature.getProperty("SETAI");
-
-                console.log("Feature properties:", {
-                  moji,
-                  cityName,
-                  area,
-                  jinko,
-                  setai,
-                });
-
-                if (moji) {
-                  setSelectedTown({
-                    MOJI: moji,
-                    CITY_NAME: cityName,
-                    AREA: Number(area),
-                    SETAI: Number(setai),
-                    JINKO: Number(jinko),
-                  });
-                }
-              });
-
-              map.data.addListener("mouseout", (event) => {
-                console.log("Mouseout event triggered");
-                map.data.revertStyle(event.feature);
-              });
-
-              console.log("Event listeners set up complete");
-            });
+              }
+            } else {
+              // マウスがフィーチャーから離れた場合
+              if (hoveredFeatureId !== null) {
+                console.log('🔄 Mouse left, removing hover from:', hoveredFeatureId);
+                mapRef.current?.getMap().setFeatureState(
+                  { source: 'kyoto-districts-source', id: hoveredFeatureId },
+                  { hover: false }
+                );
+                setHoveredFeatureId(null);
+              }
+            }
           }}
-        />
+          interactiveLayerIds={['kyoto-districts', 'kyoto-districts-hover']}
+        >
+
+          {geoJsonData && (
+            <Source 
+              id="kyoto-districts-source" 
+              type="geojson" 
+              data={geoJsonData}
+              promoteId="id"
+            >
+              <Layer
+                id="kyoto-districts"
+                type="fill"
+                paint={{
+                  'fill-color': [
+                    'case',
+                    ['has', 'JINKO'],
+                    [
+                      'interpolate',
+                      ['linear'],
+                      ['to-number', ['get', 'JINKO']],
+                      0, '#E1F5FE',     // 薄い青
+                      100, '#B3E5FC',   // 明るい青
+                      500, '#81D4FA',   // 青
+                      1000, '#4FC3F7',  // 中間の青
+                      2000, '#29B6F6',  // 濃い青
+                      5000, '#2196F3',  // 深い青
+                      10000, '#1976D2', // とても濃い青
+                      20000, '#0D47A1'  // 最も濃い青
+                    ],
+                    '#E0E0E0'  // JINKOがない場合のデフォルト色（薄いグレー）
+                  ],
+                  'fill-opacity': 0.1  // 極限まで薄く
+                }}
+              />
+              {/* ホバー時の強調レイヤー（統一された目立つ赤色） */}
+              <Layer
+                id="kyoto-districts-hover"
+                type="fill"
+                paint={{
+                  'fill-color': '#FF4444',  // 統一された目立つ赤色
+                  'fill-opacity': [
+                    'case',
+                    ['boolean', ['feature-state', 'hover'], false],
+                    0.8,  // ホバー時は濃く
+                    0     // 通常時は透明
+                  ]
+                }}
+              />
+              <Layer
+                id="kyoto-districts-border"
+                type="line"
+                paint={{
+                  'line-color': '#37474F',
+                  'line-width': 1.5,    // 枠線を太く
+                  'line-opacity': 0.6   // 枠線を少し濃く
+                }}
+              />
+            </Source>
+          )}
+        </Map>
       </div>
     </div>
   );
