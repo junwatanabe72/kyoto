@@ -1,17 +1,17 @@
 {
   "files": {
     "main.css": "/kyoto/static/css/main.a9adae4f.css",
-    "main.js": "/kyoto/static/js/main.b12d4748.js",
+    "main.js": "/kyoto/static/js/main.10c28b63.js",
     "static/js/879.c2ac77e2.chunk.js": "/kyoto/static/js/879.c2ac77e2.chunk.js",
     "static/js/453.10651611.chunk.js": "/kyoto/static/js/453.10651611.chunk.js",
     "index.html": "/kyoto/index.html",
     "main.a9adae4f.css.map": "/kyoto/static/css/main.a9adae4f.css.map",
-    "main.b12d4748.js.map": "/kyoto/static/js/main.b12d4748.js.map",
+    "main.10c28b63.js.map": "/kyoto/static/js/main.10c28b63.js.map",
     "879.c2ac77e2.chunk.js.map": "/kyoto/static/js/879.c2ac77e2.chunk.js.map",
     "453.10651611.chunk.js.map": "/kyoto/static/js/453.10651611.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.a9adae4f.css",
-    "static/js/main.b12d4748.js"
+    "static/js/main.10c28b63.js"
   ]
 }
