@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/kyoto/static/css/main.959d51dd.css",
-    "main.js": "/kyoto/static/js/main.334104d7.js",
-    "static/js/453.19c98df0.chunk.js": "/kyoto/static/js/453.19c98df0.chunk.js",
+    "main.css": "/kyoto/static/css/main.9a504206.css",
+    "main.js": "/kyoto/static/js/main.1e0fa783.js",
+    "static/js/453.10651611.chunk.js": "/kyoto/static/js/453.10651611.chunk.js",
     "index.html": "/kyoto/index.html",
-    "main.959d51dd.css.map": "/kyoto/static/css/main.959d51dd.css.map",
-    "main.334104d7.js.map": "/kyoto/static/js/main.334104d7.js.map",
-    "453.19c98df0.chunk.js.map": "/kyoto/static/js/453.19c98df0.chunk.js.map"
+    "main.9a504206.css.map": "/kyoto/static/css/main.9a504206.css.map",
+    "main.1e0fa783.js.map": "/kyoto/static/js/main.1e0fa783.js.map",
+    "453.10651611.chunk.js.map": "/kyoto/static/js/453.10651611.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.959d51dd.css",
-    "static/js/main.334104d7.js"
+    "static/css/main.9a504206.css",
+    "static/js/main.1e0fa783.js"
   ]
 }
